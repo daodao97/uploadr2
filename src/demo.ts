@@ -1,4 +1,3 @@
-
 import { html, raw } from 'hono/html'
 export const Demo = raw`
 <html lang="zh-CN">
@@ -82,6 +81,10 @@ export const Demo = raw`
     <div class="upload-container">
         <h2>上传文件</h2>
         <form id="uploadForm">
+            <div style="margin-bottom: 15px;">
+                <label for="apiKey">API Key:</label><br>
+                <input type="password" id="apiKey" name="apiKey" required style="margin-top: 5px; padding: 5px; width: 200px;">
+            </div>
             <input type="file" id="fileInput" name="file" required>
             <br>
             <button type="submit" class="btn">上传</button>
@@ -96,20 +99,37 @@ export const Demo = raw`
 
     <div>
         <h2>API 使用说明</h2>
-        <h3>上传文件</h3>
-        <p>POST 请求到当前地址，使用 multipart/form-data 格式，文件字段名为 "file"</p>
+        <h3>1. 获取上传令牌</h3>
+        <p>首先需要获取上传令牌：</p>
+        <pre><code>
+// 获取上传令牌
+fetch('/get-upload-token', {
+    method: 'POST',
+    headers: {
+        'X-API-Key': 'your-api-key'
+    }
+})
+.then(response => response.json())
+.then(data => console.log('上传令牌:', data.token));
+        </code></pre>
+
+        <h3>2. 上传文件</h3>
+        <p>使用获取到的令牌上传文件：</p>
         <pre><code>
 // 使用 fetch API 上传
 const formData = new FormData();
 formData.append('file', fileObject);
 
 fetch('/', {
-  method: 'POST',
-  body: formData
+    method: 'POST',
+    headers: {
+        'Upload-Token': 'your-upload-token'
+    },
+    body: formData
 })
 .then(response => response.json())
 .then(data => console.log('文件URL:', data.url));
-    </code></pre>
+        </code></pre>
     </div>
 
     <script>
@@ -117,6 +137,7 @@ fetch('/', {
             e.preventDefault();
 
             const fileInput = document.getElementById('fileInput');
+            const apiKeyInput = document.getElementById('apiKey');
             const resultDiv = document.getElementById('result');
             const messageEl = document.getElementById('message');
             const fileUrlEl = document.getElementById('fileUrl');
@@ -128,12 +149,36 @@ fetch('/', {
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+            if (!apiKeyInput.value) {
+                resultDiv.className = 'error';
+                messageEl.textContent = '请输入 API Key';
+                resultDiv.style.display = 'block';
+                return;
+            }
 
             try {
+                // 首先获取上传令牌
+                const tokenResponse = await fetch('/get-upload-token', {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': apiKeyInput.value
+                    }
+                });
+
+                const tokenData = await tokenResponse.json();
+                if (!tokenData.success) {
+                    throw new Error(tokenData.message || '获取上传令牌失败');
+                }
+
+                // 使用令牌上传文件
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
                 const response = await fetch('/', {
                     method: 'POST',
+                    headers: {
+                        'Upload-Token': tokenData.token
+                    },
                     body: formData
                 });
 

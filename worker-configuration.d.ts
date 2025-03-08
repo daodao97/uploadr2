@@ -3,4 +3,6 @@
 interface CloudflareBindings {
     MY_BUCKET: R2Bucket;
     OSS_PREFIX: string;
+    JWT_SECRET: string;
+    INTERNAL_API_KEY: string;
 }

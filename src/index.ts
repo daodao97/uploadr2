@@ -2,8 +2,22 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { Demo } from './demo'
 import { v4 as uuidv4 } from 'uuid'
+import { sign, verify } from 'hono/jwt'
 
-const app = new Hono<{ Bindings: CloudflareBindings }>()
+type Variables = {
+  tokenPayload: TokenPayload
+}
+
+const app = new Hono<{
+  Bindings: CloudflareBindings
+  Variables: Variables
+}>()
+
+type TokenPayload = {
+  exp: number
+  maxSize: number
+  allowedTypes: string[]
+}
 
 // 配置 CORS
 app.use('*', cors({
@@ -19,14 +33,73 @@ app.get('/demo', (c) => {
   return c.html(Demo)
 })
 
-// 处理文件上传 - POST 请求
-app.post('/', async (c) => {
+// 生成上传令牌的接口
+app.post('/get-upload-token', async (c) => {
+  try {
+    // 从请求头获取内部系统调用的 API Key
+    const apiKey = c.req.header('X-API-Key')
+    if (apiKey !== c.env.INTERNAL_API_KEY) {
+      return c.json({ success: false, message: '无权限生成令牌' }, 403)
+    }
+
+    // 生成一个临时的上传令牌
+    const payload = {
+      exp: Math.floor(Date.now() / 1000) + 3600, // 1小时后过期
+      // 可以添加其他限制条件
+      maxSize: 10 * 1024 * 1024, // 最大文件大小限制
+      allowedTypes: ['image/jpeg', 'image/png'], // 允许的文件类型
+    }
+
+    const token = await sign(payload, c.env.JWT_SECRET)
+    return c.json({ success: true, token })
+  } catch (error: any) {
+    return c.json({ success: false, message: error.message }, 500)
+  }
+})
+
+// 验证上传令牌的中间件
+async function validateUploadToken(c: any, next: any) {
+  try {
+    const token = c.req.header('Upload-Token')
+    if (!token) {
+      return c.json({ success: false, message: '缺少上传令牌' }, 401)
+    }
+
+    // 验证令牌
+    const payload = await verify(token, c.env.JWT_SECRET) as TokenPayload
+
+    // 检查令牌是否过期
+    if (payload.exp < Math.floor(Date.now() / 1000)) {
+      return c.json({ success: false, message: '令牌已过期' }, 401)
+    }
+
+    // 将令牌信息保存到请求上下文中
+    c.set('tokenPayload', payload)
+    await next()
+  } catch (error) {
+    return c.json({ success: false, message: '无效的上传令牌' }, 401)
+  }
+}
+
+// 在上传接口中使用令牌验证
+app.post('/', validateUploadToken, async (c) => {
   try {
     const formData = await c.req.formData()
     const file = formData.get('file')
+    const tokenPayload = c.get('tokenPayload') as TokenPayload
 
     if (!file || !(file instanceof File)) {
-      return c.json({ success: false, message: 'No file uploaded' }, 400)
+      return c.json({ success: false, message: '没有文件上传' }, 400)
+    }
+
+    // 验证文件大小
+    if (file.size > tokenPayload.maxSize) {
+      return c.json({ success: false, message: '文件大小超出限制' }, 400)
+    }
+
+    // 验证文件类型
+    if (!tokenPayload.allowedTypes.includes(file.type)) {
+      return c.json({ success: false, message: '不支持的文件类型' }, 400)
     }
 
     // 生成唯一文件名
