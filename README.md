@@ -29,7 +29,7 @@
 1. 克隆仓库：
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/daodao97/uploadr2.git
 cd uploadr2
 ```
 
@@ -42,6 +42,12 @@ npm install
 3. 配置环境：
 
 复制 `wrangler.jsonc.example` 为 `wrangler.jsonc` 并根据需要修改配置。
+
+```shell
+cp wrangler.jsonc.example wrangler.jsonc 
+```
+
+修改  `$YOUR_BUCKET_NAME` 为你自己的桶名称
 
 ### 开发
 
@@ -79,11 +85,3 @@ npm run cf-typegen
 
 MIT
 
-```
-npm install
-npm run dev
-```
-
-```
-npm run deploy
-```
