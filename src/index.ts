@@ -22,7 +22,7 @@ type TokenPayload = {
 // 配置 CORS
 app.use('*', cors({
   origin: '*',
-  allowHeaders: ['Content-Type'],
+  allowHeaders: ['Content-Type', 'Upload-Token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['Content-Type', 'Content-Length'],
   maxAge: 86400,
